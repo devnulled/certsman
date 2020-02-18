@@ -7,10 +7,11 @@ import (
 	"os/signal"
 	"time"
 
+	"github.com/devnulled/certsman/pkg/certs"
+	"github.com/devnulled/certsman/pkg/certsman"
+	"github.com/devnulled/certsman/pkg/storage"
+
 	"github.com/bluele/gcache"
-	"github.com/devnulled/certsman/pkg/certgen"
-	"github.com/devnulled/certsman/pkg/memstorage"
-	"github.com/devnulled/certsman/pkg/tokencert"
 	"github.com/gorilla/mux"
 	uuid "github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
@@ -43,13 +44,13 @@ var inMemCache = gcache.New(InMemoryCertStorageLimit).
 	Expiration(time.Minute * DefaultCertDurationMinutes).
 	Build()
 
-var inMemPersist = memstorage.InMemStorage{Cache: inMemCache}
+var inMemPersist = storage.InMemStorage{Cache: inMemCache}
 
 // The service which generates the certificates
-var tokenCertIssuer = tokencert.TokenCertIssuer{KeyLength: DefaultTokenCertKeyLength}
+var tokenCertIssuer = certs.TokenCertIssuer{KeyLength: DefaultTokenCertKeyLength}
 
 // The cert service that that is compromised of the previous two impls
-var tokenCertService = certgen.CerfificateService{Issuer: tokenCertIssuer, Persistence: inMemPersist}
+var tokenCertService = certsman.CerfificateService{Issuer: tokenCertIssuer, Persistence: inMemPersist}
 
 // RunServer starts and runs the server
 func RunServer() {
@@ -103,13 +104,13 @@ func RunServer() {
 	os.Exit(0)
 
 	/*
-		certRequest := certgen.CertificateRequest{
+		certRequest := certsman.CertificateRequest{
 			Hostname: "yellow.com",
 		}
 
-		tokenCertGenerator := tokencert.TokenCertIssuer{KeyLength: DefaultTokenCertKeyLength}
+		tokencertsmanerator := tokencert.TokenCertIssuer{KeyLength: DefaultTokenCertKeyLength}
 
-		thisCert, certErr := tokenCertGenerator.IssueCertificate(certRequest)
+		thisCert, certErr := tokencertsmanerator.IssueCertificate(certRequest)
 
 		if certErr == nil {
 			log.Info(thisCert)
@@ -126,7 +127,7 @@ func certificateGetHandler(w http.ResponseWriter, r *http.Request) {
 	hostname := vars["hostname"]
 	reqID := requestIDGenerator()
 
-	req := certgen.CertificateRequest{
+	req := certsman.CertificateRequest{
 		RequestID: reqID,
 		Hostname:  hostname,
 	}
