@@ -9,12 +9,14 @@ import (
 )
 
 // TokenCertIssuer user-defined type
-type TokenCertIssuer struct{}
+type TokenCertIssuer struct {
+	KeyLength int
+}
 
 // Returns a generated certificate
 func (t TokenCertIssuer) IssueCertificate(req certgen.CertificateRequest) (certgen.Certificate, error) {
 
-	certStr, err := cryptoGenerator(1028)
+	certStr, err := cryptoGenerator(t.KeyLength)
 
 	if err == nil {
 		cert := certgen.Certificate{

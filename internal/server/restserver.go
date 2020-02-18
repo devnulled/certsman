@@ -1,27 +1,34 @@
 package server
 
 import (
+	"time"
+
+	"github.com/bluele/gcache"
 	"github.com/devnulled/certsman/pkg/certgen"
+	"github.com/devnulled/certsman/pkg/tokencert"
 	log "github.com/sirupsen/logrus"
 )
 
 func RunServer() {
-	log.Info("hi there")
+
+	gc := gcache.New(2000).
+		ARC().
+		Expiration(time.Minute * 10).
+		Build()
+
 	certRequest := certgen.CertificateRequest{
 		Hostname: "yellow.com",
 	}
 
-	log.Info(certRequest)
+	certGenerator := tokencert.TokenCertIssuer{KeyLength: 1024}
 
-	/*
-		var certGenerator tokencert.TokenCertIssuer
+	thisCert, certErr := certGenerator.IssueCertificate(certRequest)
 
-		thisCert, certErr := certGenerator.TokenCertIssuer.IssueCertificate(certRequest)
+	if certErr == nil {
+		log.Info(thisCert)
+		gc.Set(certRequest.Hostname, thisCert)
+	} else {
+		log.Error(certErr)
+	}
 
-		if certErr == nil {
-			log.Info(thisCert)
-		} else {
-			log.Error(certErr)
-		}
-	*/
 }
