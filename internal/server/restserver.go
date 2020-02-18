@@ -46,22 +46,18 @@ var inMemCache = gcache.New(InMemoryCertStorageLimit).
 
 var inMemPersist = storage.InMemStorage{Cache: inMemCache}
 
-// The service which generates the certificates
-var tokenCertIssuer = certs.TokenCertIssuer{KeyLength: DefaultTokenCertKeyLength}
+// The cert service which generates string based certificates
+var stringCertIssuer = certs.StringCertIssuer{StringPrefix: "foo-"}
 
 // The cert service that that is compromised of the previous two impls
-var tokenCertService = certsman.CerfificateService{Issuer: tokenCertIssuer, Persistence: inMemPersist}
+var stringCertService = certsman.CerfificateService{Issuer: stringCertIssuer, Persistence: inMemPersist}
 
 // RunServer starts and runs the server
 func RunServer() {
+	// Only log the warning severity or above.
+	log.SetLevel(log.DebugLevel)
+
 	log.Info("Starting up certsman server at ", DefaultServerAddress)
-	// Build our cache collection for the in-memory persistence
-	/*
-		gc := gcache.New(InMemoryCertStorageLimit).
-			ARC().
-			Expiration(time.Minute * DefaultCertDurationMinutes).
-			Build()
-	*/
 
 	// Start our HTTP router/handler
 	r := mux.NewRouter()
@@ -102,29 +98,17 @@ func RunServer() {
 	// to finalize based on context cancellation.
 	log.Info("Shutting down certsman server gracefully")
 	os.Exit(0)
-
-	/*
-		certRequest := certsman.CertificateRequest{
-			Hostname: "yellow.com",
-		}
-
-		tokencertsmanerator := tokencert.TokenCertIssuer{KeyLength: DefaultTokenCertKeyLength}
-
-		thisCert, certErr := tokencertsmanerator.IssueCertificate(certRequest)
-
-		if certErr == nil {
-			log.Info(thisCert)
-			gc.Set(certRequest.Hostname, thisCert)
-		} else {
-			log.Error(certErr)
-		}
-	*/
 }
 
 func certificateGetHandler(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	hostname := vars["hostname"]
+
+	if len(hostname) <= 3 {
+		http.Error(w, "Invalid hostname provided", http.StatusNotAcceptable)
+	}
+
 	reqID := requestIDGenerator()
 
 	req := certsman.CertificateRequest{
@@ -132,14 +116,21 @@ func certificateGetHandler(w http.ResponseWriter, r *http.Request) {
 		Hostname:  hostname,
 	}
 
-	resp := tokenCertService.GetOrCreateCertificate(req)
+	resp := stringCertService.GetOrCreateCertificate(req)
 
 	if !resp.IsSuccess {
 		http.Error(w, resp.Error.Error(), resp.StatusCode)
 		return
 	}
 
-	log.Info(req)
+	respBody := []byte(resp.Certificate.CertificateBody)
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(resp.StatusCode)
+	w.Write(respBody)
+
+	log.Info("Request: ", req)
+	log.Info("Response: ", resp)
 
 }
 

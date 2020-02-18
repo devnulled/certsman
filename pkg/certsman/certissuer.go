@@ -2,6 +2,8 @@ package certsman
 
 import (
 	"time"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // CertificateIssuer provides a contract for various types of certificates to be generated/issued from
@@ -66,12 +68,14 @@ type CerfificateService struct {
 func (svc CerfificateService) GetOrCreateCertificate(req CertificateRequest) CertificateResponse {
 	storedCert, retErr := svc.Persistence.RetrieveCertificate(req)
 
-	if retErr == nil {
+	if retErr != nil {
+		log.Debug("No cert found in persistance for ", req.Hostname)
 		// The certificate must not exist.  Create a new one and store.
 		newCert, createErr := svc.Issuer.IssueCertificate(req)
 
 		if createErr != nil {
 			// Something bad happened.  Lets bail.
+			log.Error("Unable to create cert for ", req.Hostname)
 			resp := marshallErrResponse(req, createErr)
 			return sleepyResponder(resp)
 		}
@@ -81,6 +85,7 @@ func (svc CerfificateService) GetOrCreateCertificate(req CertificateRequest) Cer
 
 		if storeErr != nil {
 			// Something bad happened.  Lets bail.
+			log.Error("Unable to store cert for ", req.Hostname)
 			resp := marshallErrResponse(req, storeErr)
 			return sleepyResponder(resp)
 		}
@@ -91,6 +96,7 @@ func (svc CerfificateService) GetOrCreateCertificate(req CertificateRequest) Cer
 	}
 
 	// Found the cert in persistence, lets return it
+	log.Debug("Cert found in persistance for ", req.Hostname)
 	resp := marshallCertificateResponse(req, storedCert, true, false)
 	return sleepyResponder(resp)
 }
@@ -120,7 +126,6 @@ func marshallErrResponse(req CertificateRequest, err error) CertificateResponse 
 		WasCreated:          false,
 		WasCached:           false,
 	}
-
 	return resp
 }
 
@@ -128,7 +133,7 @@ func marshallErrResponse(req CertificateRequest, err error) CertificateResponse 
 func sleepyResponder(resp CertificateResponse) CertificateResponse {
 
 	//TODO: Make this configurable somewhere else
-	time.Sleep(1 * time.Second)
+	//time.Sleep(1 * time.Second)
 
 	return resp
 }
