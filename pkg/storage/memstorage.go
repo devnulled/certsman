@@ -22,8 +22,13 @@ type InMemStorage struct {
 
 // CreateCertificate creates a cached certificate record in memory
 func (i InMemStorage) CreateCertificate(req certsman.CertificateRequest, cert certsman.Certificate) (bool, error) {
+
+	log.WithFields(log.Fields{
+		"RequestID": req.RequestID,
+		"Hostname":  req.Hostname,
+	}).Trace("Storing certificate")
+
 	i.Cache.Set(req.Hostname, cert)
-	log.Debug("Storing certificate for ", req.Hostname)
 	return true, nil
 }
 
@@ -34,13 +39,19 @@ func (i InMemStorage) RetrieveCertificate(req certsman.CertificateRequest) (cert
 	cachedCert, err := i.Cache.Get(req.Hostname)
 
 	if err != nil {
-		log.Debug("Unable to find cached certificate for ", req.Hostname)
+		log.WithFields(log.Fields{
+			"RequestID": req.RequestID,
+			"Hostname":  req.Hostname,
+		}).Trace("Unable to find cached certificate")
 		return certsman.Certificate{}, err
 	}
 
 	mapstructure.Decode(cachedCert, &cert)
 
-	log.Debug("Found cached certificate for ", req.Hostname)
+	log.WithFields(log.Fields{
+		"RequestID": req.RequestID,
+		"Hostname":  req.Hostname,
+	}).Trace("Found cached certificate")
 	return cert, nil
 }
 

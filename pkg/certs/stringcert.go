@@ -31,7 +31,11 @@ func (i StringCertIssuer) IssueCertificate(req certsman.CertificateRequest) (cer
 		Hostname:        req.Hostname,
 		CertificateBody: certBuilder.String(),
 	}
-	log.Info("String certificate issued for ", req.Hostname)
+
+	log.WithFields(log.Fields{
+		"RequestID": req.RequestID,
+		"Hostname":  req.Hostname,
+	}).Info("String certificate issued for ", req.Hostname)
 
 	if i.SleepEnabled == true {
 		// Would run as a go-routine if possible, but that might be cheating?
@@ -43,8 +47,16 @@ func (i StringCertIssuer) IssueCertificate(req certsman.CertificateRequest) (cer
 
 // SleepyTime is an artifical time to sleep
 func sleepyTime(sleepTime time.Duration, hostname string) {
-	log.Debug("String certificate sleeping for ", hostname)
-	time.Sleep(sleepTime)
-	log.Debug("String certificate sleeping complete for ", hostname)
 
+	log.WithFields(log.Fields{
+		"SleepTime": sleepTime,
+		"Hostname":  hostname,
+	}).Debug("String certificate sleeping")
+
+	time.Sleep(sleepTime)
+
+	log.WithFields(log.Fields{
+		"SleepTime": sleepTime,
+		"Hostname":  hostname,
+	}).Debug("String certificate sleep complete")
 }

@@ -29,9 +29,23 @@ You can alter the logging level, and disable things like the arbitrary sleep in 
 
 ## Design Notes
 
-The way that the application makes sure to keep the cert for itself is pretty hacky and far from perfect.  I just ran out of time to fully work through the problem.
+I tried to use the cache expiration to communicate via a channel to pick-up on when the cache entry for the
+hostname of the server expired. This would allow the service to generate a new cert automatically when it was reaped
+from the cache.  
 
-I think the best way to tackle this problem would be to add a function to the cache whenever it expires an item, to send the key name to a channel.  Whatever function is waiting on the other end of this channel would check to see if the cert being expired matched the cert for the server itself.  If so, it would automatically go create one again.
+However, the cache is lazy reaped, so it gets expunged when either the cache is full, or
+upon access when the key is accessed but is expired.  Using a reaper method to automatically update the cert creates a race condition so it really isn't a solution at all. You can look through `internal/server/restserver.go` to see some of my leftovers from trying this out.
+
+For now, the best way I can think of to keep it updated is just to access its own cert frequently so that it keeps it
+up to date.  The overhead of trying to load the servers cert from cache is very low.
+
+I think running a timer every 10 minutes is going to have drift and get off pretty easily.
+
+The only other thing I can think of at the moment would be to introduce my own background routine on a timer that
+reaps the expired cache on it's own, and then uses that process to announce an event when the servers cert has
+been reaped, so that it can be created again.
+
+After some more testing, I now realize that dupli
 
 ## API
 

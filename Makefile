@@ -95,6 +95,9 @@ clean:
 basic-load-test:
 	hey -n 1000 -m GET http://localhost:8080/certtest/
 
+cached-load-test:
+	hey -n 1000 -m GET http://localhost:8080/cert/fooyork.com
+
 
 .PHONY: dependencies linux darwin windows test run docker-build mod-init vet fmt generate clean benchmark
 

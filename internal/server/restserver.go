@@ -53,7 +53,7 @@ var wait = time.Second * DefaultServerGracefulTimeoutSeconds
 // Memory cache store
 var memoryCache gcache.Cache
 
-// InMemory persistance
+// InMemory persistence
 var inMemPersist storage.InMemStorage
 
 // The cert service which generates string based certificates
@@ -68,14 +68,31 @@ func RunServer() {
 	log.SetLevel(log.InfoLevel)
 	log.Info("certsman starting...")
 
+	// Create a channel to communicate the expired cache items
+	// expireChannel := make(chan string)
+
 	memoryCache = gcache.New(InMemoryCertStorageLimit).
 		ARC().
 		EvictedFunc(func(key, value interface{}) {
-			//TODO: Send this back to a channel to reprocess the servers cert
-			log.Debug("Expired from cache: ", fmt.Sprint(key))
+			// The cache seems to be lazy expired
+			// IE, only gets expunged when accessed OR
+			// if the collection capacity is reached during
+			// an addition.
+			//
+			// Trying to use this to expire the cache only
+			// creates a race condition
+			log.WithFields(log.Fields{
+				"Hostname": fmt.Sprint(key),
+			}).Debug("Certificate expired from cache")
+
+			// expireChannel <- fmt.Sprint(key)
 		}).
+		//Expiration(time.Second * 20).
 		Expiration(time.Minute * DefaultCertDurationMinutes).
 		Build()
+
+	// Process expired cache keys and renew our own cert if it gets evicted
+	// go cacheExpirationHandler(expireChannel)
 
 	inMemPersist = storage.InMemStorage{Cache: memoryCache}
 
@@ -90,6 +107,7 @@ func RunServer() {
 	}
 
 	log.Info("Generating initial server cert")
+	// In theory, this request should block as the server needs its own cert to startup successfully
 	selfCertIssuer()
 
 	log.Info("Starting timed task to refresh server cert in background")
@@ -140,15 +158,22 @@ func RunServer() {
 }
 
 func cacheExpirationHandler(hostnames chan string) {
+	hostname := <-hostnames
 
+	if hostname == DefaultCertServerName {
+		log.Info("Server cert expired from cache. Refreshing.")
+		go selfCertIssuer()
+	}
 }
 
+// certTestGetHandler is a convenience method for load testing
 func certTestGetHandler(w http.ResponseWriter, r *http.Request) {
 	// only use 2 chars so that some of the lookups are cached
 	mux.Vars(r)["hostname"] = randomString(4)
 	certificateGetHandler(w, r)
 }
 
+// randomString is used by certTestGetHandler to generate random hostnames
 func randomString(n int) string {
 	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 
@@ -159,22 +184,30 @@ func randomString(n int) string {
 	return string(b)
 }
 
+// certificateGetHandler is the main HTTP handler for certificate requests
 func certificateGetHandler(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
-	hostname := vars["hostname"]
+	initHostname := vars["hostname"]
 
-	if len(hostname) <= 1 {
+	if len(initHostname) <= 1 {
 		http.Error(w, "Invalid hostname provided", http.StatusNotAcceptable)
 		return
 	}
+
+	hostname := strings.ToLower(initHostname)
 
 	reqID := requestIDGenerator()
 
 	req := certsman.CertificateRequest{
 		RequestID: reqID,
-		Hostname:  strings.ToLower(hostname),
+		Hostname:  hostname,
 	}
+
+	log.WithFields(log.Fields{
+		"RequestID": reqID,
+		"Hostname":  hostname,
+	}).Trace("Certificate request recieved")
 
 	resp := stringCertService.GetOrCreateCertificate(req)
 
@@ -191,12 +224,14 @@ func certificateGetHandler(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+// requestIDGenerator generates RequestIds.  With more time, would use something like Zipkin.
 func requestIDGenerator() string {
 	u := uuid.NewV4()
 
 	return u.String()
 }
 
+// selfCertIssuer is a convenience method for generating the certificate for the server itself
 func selfCertIssuer() {
 	// TODO: This is kind of hacky, maybe would refactor later to not use requests perhaps?
 	reqID := requestIDGenerator()
@@ -206,8 +241,10 @@ func selfCertIssuer() {
 		Hostname:  DefaultCertServerName,
 	}
 
-	log.Debug("Generating/updating self-cert for server ", DefaultCertServerName)
-
+	log.WithFields(log.Fields{
+		"RequestID": reqID,
+		"Hostname":  DefaultCertServerName,
+	}).Debug("Updating self-cert for server")
 	stringCertService.GetOrCreateCertificate(req)
 }
 
@@ -222,7 +259,7 @@ func selfCertIssueTimer() {
 	tick := time.Tick(5 * time.Second)
 
 	for range tick {
-		log.Debug("Cert issuer timer is now refreshing the server certificate")
+		log.Trace("Cert issuer timer is now refreshing the server certificate")
 		selfCertIssuer()
 	}
 }

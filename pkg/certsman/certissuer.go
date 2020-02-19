@@ -65,7 +65,7 @@ type Certificate struct {
 	Expiration time.Duration
 }
 
-// CerfificateService provides a contract for a particular certificate implementation, and it's backing persistance implementation
+// CerfificateService provides a contract for a particular certificate implementation, and it's backing persistence implementation
 type CerfificateService struct {
 	// The particular certificate Issuer
 	Issuer      CertificateIssuer
@@ -77,34 +77,63 @@ func (svc CerfificateService) GetOrCreateCertificate(req CertificateRequest) Cer
 	storedCert, retErr := svc.Persistence.RetrieveCertificate(req)
 
 	if retErr != nil {
-		log.Debug("No cert found in persistance for ", req.Hostname)
+
+		log.WithFields(log.Fields{
+			"RequestID": req.RequestID,
+			"Hostname":  req.Hostname,
+		}).Debug("No cert found in persistence.  Creating new one.")
 		// The certificate must not exist.  Create a new one and store.
 		newCert, createErr := svc.Issuer.IssueCertificate(req)
 
 		if createErr != nil {
 			// Something bad happened.  Lets bail.
-			log.Error("Unable to create cert for ", req.Hostname)
+			log.WithFields(log.Fields{
+				"RequestID": req.RequestID,
+				"Hostname":  req.Hostname,
+			}).Error("Unable to create cert for ", req.Hostname)
 			resp := marshallErrResponse(req, createErr)
 			return resp
 		}
 
-		// Created new cert.  Lets store it and then respond.
-		_, storeErr := svc.Persistence.CreateCertificate(req, newCert)
+		// Created new cert.  Lets make sure another process hasn't created and stored one.
+		// This is not the best implementation.. the requests should get queued uniquely by hostname so
+		// that they never get duplicated to begin with.
 
-		if storeErr != nil {
-			// Something bad happened.  Lets bail.
-			log.Error("Unable to store cert for ", req.Hostname)
-			resp := marshallErrResponse(req, storeErr)
+		otherCert, otherCertErr := svc.Persistence.RetrieveCertificate(req)
+
+		if otherCertErr != nil {
+			_, storeErr := svc.Persistence.CreateCertificate(req, newCert)
+
+			if storeErr != nil {
+				// Something bad happened.  Lets bail.
+				log.WithFields(log.Fields{
+					"RequestID": req.RequestID,
+					"Hostname":  req.Hostname,
+				}).Error("Unable to store cert for ", req.Hostname)
+				resp := marshallErrResponse(req, storeErr)
+				return resp
+			}
+
+			// Persistence was also successful! Lets return the cert now that it's been stored
+			resp := marshallCertificateResponse(req, newCert, true, false)
 			return resp
+
 		}
 
-		// Persistence was also successful! Lets return the cert now that it's been stored
-		resp := marshallCertificateResponse(req, newCert, true, false)
-		return resp
+		log.WithFields(log.Fields{
+			"RequestID": req.RequestID,
+			"Hostname":  req.Hostname,
+		}).Debug("Cert found in persistence from another paralell request for ", req.Hostname)
+		// Another process already stored the certificate.  Lets return that one instead.
+		otherResp := marshallCertificateResponse(req, otherCert, true, false)
+		return otherResp
 	}
 
 	// Found the cert in persistence, lets return it
-	log.Debug("Cert found in persistance for ", req.Hostname)
+	log.WithFields(log.Fields{
+		"RequestID": req.RequestID,
+		"Hostname":  req.Hostname,
+	}).Debug("Cert found in persistence for ", req.Hostname)
 	resp := marshallCertificateResponse(req, storedCert, true, false)
 	return resp
 }
