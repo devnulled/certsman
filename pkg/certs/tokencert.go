@@ -1,3 +1,10 @@
+/*
+
+The TokenCertIssuer is a CertificateIssuer which provides a certificate based on
+a unique, securely genenrated string.
+
+*/
+
 package certs
 
 import (

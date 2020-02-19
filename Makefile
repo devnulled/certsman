@@ -96,7 +96,6 @@ basic-load-test:
 	hey -n 1000 -m GET http://localhost:8080/certtest/
 
 
-
 .PHONY: dependencies linux darwin windows test run docker-build mod-init vet fmt generate clean benchmark
 
 define isinstalled

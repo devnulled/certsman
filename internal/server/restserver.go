@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"os"
@@ -49,28 +50,44 @@ const DefaultStringCertPrefix = "foo-"
 // How long to wait before shutting the server down to let connections drain
 var wait = time.Second * DefaultServerGracefulTimeoutSeconds
 
+// Memory cache store
+var memoryCache gcache.Cache
+
 // InMemory persistance
-var inMemPersist = storage.InMemStorage{Cache: gcache.New(InMemoryCertStorageLimit).
-	ARC().
-	Expiration(time.Minute * DefaultCertDurationMinutes).
-	Build()}
+var inMemPersist storage.InMemStorage
 
 // The cert service which generates string based certificates
-var stringCertIssuer = certs.StringCertIssuer{
-	StringPrefix:      DefaultStringCertPrefix,
-	SleepEnabled:      true,
-	SleepyTimeSeconds: DefaultArtificalSleepSeconds}
+var stringCertIssuer certs.StringCertIssuer
 
 // The cert service that that is compromised of the previous two impls
-var stringCertService = certsman.CerfificateService{
-	Issuer:      stringCertIssuer,
-	Persistence: inMemPersist,
-}
+var stringCertService certsman.CerfificateService
 
 // RunServer starts and runs the server
 func RunServer() {
 
 	log.SetLevel(log.InfoLevel)
+	log.Info("certsman starting...")
+
+	memoryCache = gcache.New(InMemoryCertStorageLimit).
+		ARC().
+		EvictedFunc(func(key, value interface{}) {
+			//TODO: Send this back to a channel to reprocess the servers cert
+			log.Debug("Expired from cache: ", fmt.Sprint(key))
+		}).
+		Expiration(time.Minute * DefaultCertDurationMinutes).
+		Build()
+
+	inMemPersist = storage.InMemStorage{Cache: memoryCache}
+
+	stringCertIssuer = certs.StringCertIssuer{
+		StringPrefix:      DefaultStringCertPrefix,
+		SleepEnabled:      true,
+		SleepyTimeSeconds: DefaultArtificalSleepSeconds}
+
+	stringCertService = certsman.CerfificateService{
+		Issuer:      stringCertIssuer,
+		Persistence: inMemPersist,
+	}
 
 	log.Info("Generating initial server cert")
 	selfCertIssuer()
@@ -108,7 +125,7 @@ func RunServer() {
 
 	// Block until we receive our signal.
 	<-c
-
+	log.Info("certsman stopping...")
 	// Create a deadline to wait for.
 	ctx, cancel := context.WithTimeout(context.Background(), wait)
 	defer cancel()
@@ -118,8 +135,12 @@ func RunServer() {
 	// Optionally, you could run srv.Shutdown in a goroutine and block on
 	// <-ctx.Done() if your application should wait for other services
 	// to finalize based on context cancellation.
-	log.Info("Shutting down certsman server gracefully")
+	log.Info("certsman out!")
 	os.Exit(0)
+}
+
+func cacheExpirationHandler(hostnames chan string) {
+
 }
 
 func certTestGetHandler(w http.ResponseWriter, r *http.Request) {

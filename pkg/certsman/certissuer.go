@@ -1,3 +1,11 @@
+/*
+
+This is the main package for certsman, which mostly provides contracts.
+
+certissuer.go - provides contracts for clients or issuers which can produce a requested certificate
+presistence.go - provides contracts for swappable persistence layers for cerificate issuers
+
+*/
 package certsman
 
 import (

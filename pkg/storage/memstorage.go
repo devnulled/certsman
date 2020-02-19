@@ -1,3 +1,10 @@
+/*
+
+The storage package provides implementations of persistence
+
+memstorage.go - In-Memory storage for one instance of certsman.  Not durable.
+
+*/
 package storage
 
 import (

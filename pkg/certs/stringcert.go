@@ -1,3 +1,9 @@
+/*
+
+The StringCertIssuer is a CertificateIssuer which provides a certificate based on
+a simple genenrated string.
+
+*/
 package certs
 
 import (
