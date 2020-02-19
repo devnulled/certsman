@@ -77,7 +77,7 @@ func (svc CerfificateService) GetOrCreateCertificate(req CertificateRequest) Cer
 			// Something bad happened.  Lets bail.
 			log.Error("Unable to create cert for ", req.Hostname)
 			resp := marshallErrResponse(req, createErr)
-			return sleepyResponder(resp)
+			return resp
 		}
 
 		// Created new cert.  Lets store it and then respond.
@@ -87,18 +87,18 @@ func (svc CerfificateService) GetOrCreateCertificate(req CertificateRequest) Cer
 			// Something bad happened.  Lets bail.
 			log.Error("Unable to store cert for ", req.Hostname)
 			resp := marshallErrResponse(req, storeErr)
-			return sleepyResponder(resp)
+			return resp
 		}
 
 		// Persistence was also successful! Lets return the cert now that it's been stored
 		resp := marshallCertificateResponse(req, newCert, true, false)
-		return sleepyResponder(resp)
+		return resp
 	}
 
 	// Found the cert in persistence, lets return it
 	log.Debug("Cert found in persistance for ", req.Hostname)
 	resp := marshallCertificateResponse(req, storedCert, true, false)
-	return sleepyResponder(resp)
+	return resp
 }
 
 // marshallCertificateResponse marshalls various data into a successful certificate response
@@ -126,14 +126,5 @@ func marshallErrResponse(req CertificateRequest, err error) CertificateResponse 
 		WasCreated:          false,
 		WasCached:           false,
 	}
-	return resp
-}
-
-// sleepyResponder sleeps for a bit, then responds
-func sleepyResponder(resp CertificateResponse) CertificateResponse {
-
-	//TODO: Make this configurable somewhere else
-	//time.Sleep(1 * time.Second)
-
 	return resp
 }

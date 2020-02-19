@@ -58,6 +58,9 @@ windows:
 test:
 	go test $(PKGS)
 
+benchmark: 
+	go test -benchmem -count 1000 ${PKGS}
+
 run:
 	${BIN_DIR}/${BINARY}-darwin-${GOARCH} -thisArg hello
 
@@ -91,7 +94,7 @@ clean:
 
 
 
-.PHONY: dependencies linux darwin windows test run docker-build mod-init vet fmt generate clean
+.PHONY: dependencies linux darwin windows test run docker-build mod-init vet fmt generate clean benchmark
 
 define isinstalled
 hash $(1) >/dev/null 2>/dev/null || { echo >&2 "The binary '$(1)' is required but not found. Aborting."; exit 1; }

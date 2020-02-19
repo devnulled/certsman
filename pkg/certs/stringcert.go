@@ -2,6 +2,7 @@ package certs
 
 import (
 	"strings"
+	"time"
 
 	"github.com/devnulled/certsman/pkg/certsman"
 	log "github.com/sirupsen/logrus"
@@ -9,7 +10,8 @@ import (
 
 // StringCertIssuer provides a simple certificate based on a configurable string
 type StringCertIssuer struct {
-	StringPrefix string
+	StringPrefix      string
+	SleepyTimeSeconds time.Duration
 }
 
 // IssueCertificate returns a string based certificate
@@ -23,5 +25,16 @@ func (i StringCertIssuer) IssueCertificate(req certsman.CertificateRequest) (cer
 		CertificateBody: certBuilder.String(),
 	}
 	log.Info("String certificate issued for ", req.Hostname)
+
+	// Would run as a go-routine if possible, but that might be cheating?
+	sleepyTime(i.SleepyTimeSeconds*time.Second, req.Hostname)
 	return cert, nil
+}
+
+// SleepyTime is an artifical time to sleep
+func sleepyTime(sleepTime time.Duration, hostname string) {
+	log.Debug("String certificate sleeping for ", hostname)
+	time.Sleep(sleepTime)
+	log.Debug("String certificate sleeping complete for ", hostname)
+
 }

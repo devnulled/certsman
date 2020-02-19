@@ -22,10 +22,11 @@ func (t TokenCertIssuer) IssueCertificate(req certsman.CertificateRequest) (cert
 			Hostname:        req.Hostname,
 			CertificateBody: certStr,
 		}
+
 		return cert, nil
-	} else {
-		return certsman.Certificate{}, err
 	}
+
+	return certsman.Certificate{}, err
 
 }
 

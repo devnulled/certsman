@@ -27,35 +27,53 @@ const DefaultTokenCertKeyLength = 1024
 const DefaultCertDurationMinutes = 10
 
 // Maximum amount of certificates that get stored using the in-memory persistence
-const InMemoryCertStorageLimit = 2000
+const InMemoryCertStorageLimit = 20000
 
 // How long the server waits for connections to drain before doing a graceful shutdown
 const DefaultServerGracefulTimeoutSeconds = 15
 
+// Default address for the HTTP server to listen on
 const DefaultServerAddress = "0.0.0.0:8080"
+
+// Default name for the cert to self-generate
+const DefaultCertServerName = "secure.certsman-server.com"
+
+// Default amount of time to sleep as specified by the requirements
+const DefaultArtificalSleepSeconds = 10
+
+// Default string to use for the string cert issuer
+const DefaultStringCertPrefix = "foo-"
 
 // How long to wait before shutting the server down to let connections drain
 var wait = time.Second * DefaultServerGracefulTimeoutSeconds
 
-//TODO: Refactor the below to not use values
-// The shared in-memory persistance cache
-var inMemCache = gcache.New(InMemoryCertStorageLimit).
+// InMemory persistance
+var inMemPersist = storage.InMemStorage{Cache: gcache.New(InMemoryCertStorageLimit).
 	ARC().
 	Expiration(time.Minute * DefaultCertDurationMinutes).
-	Build()
-
-var inMemPersist = storage.InMemStorage{Cache: inMemCache}
+	Build()}
 
 // The cert service which generates string based certificates
-var stringCertIssuer = certs.StringCertIssuer{StringPrefix: "foo-"}
+var stringCertIssuer = certs.StringCertIssuer{
+	StringPrefix:      DefaultStringCertPrefix,
+	SleepyTimeSeconds: DefaultArtificalSleepSeconds}
 
 // The cert service that that is compromised of the previous two impls
-var stringCertService = certsman.CerfificateService{Issuer: stringCertIssuer, Persistence: inMemPersist}
+var stringCertService = certsman.CerfificateService{
+	Issuer:      stringCertIssuer,
+	Persistence: inMemPersist,
+}
 
 // RunServer starts and runs the server
 func RunServer() {
-	// Only log the warning severity or above.
-	log.SetLevel(log.DebugLevel)
+
+	log.SetLevel(log.InfoLevel)
+
+	log.Info("Generating initial server cert")
+	selfCertIssuer()
+
+	log.Info("Starting timed task to refresh server cert in background")
+	go selfCertIssueTimer()
 
 	log.Info("Starting up certsman server at ", DefaultServerAddress)
 
@@ -128,14 +146,41 @@ func certificateGetHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(resp.StatusCode)
 	w.Write(respBody)
-
-	log.Info("Request: ", req)
-	log.Info("Response: ", resp)
-
+	return
 }
 
 func requestIDGenerator() string {
 	u := uuid.NewV4()
 
 	return u.String()
+}
+
+func selfCertIssuer() {
+	// TODO: This is kind of hacky, maybe would refactor later to not use requests perhaps?
+	reqID := requestIDGenerator()
+
+	req := certsman.CertificateRequest{
+		RequestID: reqID,
+		Hostname:  DefaultCertServerName,
+	}
+
+	log.Debug("Generating/updating self-cert for server ", DefaultCertServerName)
+
+	stringCertService.GetOrCreateCertificate(req)
+}
+
+// selfCertIssueTimer runs as a go routine every 5 seconds to refresh the servers own certificate.
+// I think this is a better solution than having it wakeup every 10 minutes because of drift.
+// Because it's own cert is cached for 10 minutes before its regenerated, the overhead of this call
+// every 5 seconds is very minimal.  I think this tradeoff is much better than going up to a whole 10
+// minutes without a certificate.
+// There is opportunity to come-up with a much more complex way to do this that would ensure that
+// a current certificate is always there, but I think it's beyond the scope of this exercise.
+func selfCertIssueTimer() {
+	tick := time.Tick(5 * time.Second)
+
+	for range tick {
+		log.Debug("Cert issuer timer is now refreshing the server certificate")
+		selfCertIssuer()
+	}
 }
