@@ -11,6 +11,7 @@ import (
 // StringCertIssuer provides a simple certificate based on a configurable string
 type StringCertIssuer struct {
 	StringPrefix      string
+	SleepEnabled      bool
 	SleepyTimeSeconds time.Duration
 }
 
@@ -26,8 +27,11 @@ func (i StringCertIssuer) IssueCertificate(req certsman.CertificateRequest) (cer
 	}
 	log.Info("String certificate issued for ", req.Hostname)
 
-	// Would run as a go-routine if possible, but that might be cheating?
-	sleepyTime(i.SleepyTimeSeconds*time.Second, req.Hostname)
+	if i.SleepEnabled == true {
+		// Would run as a go-routine if possible, but that might be cheating?
+		sleepyTime(i.SleepyTimeSeconds*time.Second, req.Hostname)
+	}
+
 	return cert, nil
 }
 

@@ -2,9 +2,11 @@ package server
 
 import (
 	"context"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/devnulled/certsman/pkg/certs"
@@ -56,6 +58,7 @@ var inMemPersist = storage.InMemStorage{Cache: gcache.New(InMemoryCertStorageLim
 // The cert service which generates string based certificates
 var stringCertIssuer = certs.StringCertIssuer{
 	StringPrefix:      DefaultStringCertPrefix,
+	SleepEnabled:      true,
 	SleepyTimeSeconds: DefaultArtificalSleepSeconds}
 
 // The cert service that that is compromised of the previous two impls
@@ -80,6 +83,7 @@ func RunServer() {
 	// Start our HTTP router/handler
 	r := mux.NewRouter()
 	r.HandleFunc("/cert/{hostname}", certificateGetHandler).Methods("GET")
+	r.HandleFunc("/certtest/", certTestGetHandler).Methods("GET")
 
 	srv := &http.Server{
 		Addr: DefaultServerAddress,
@@ -118,20 +122,37 @@ func RunServer() {
 	os.Exit(0)
 }
 
+func certTestGetHandler(w http.ResponseWriter, r *http.Request) {
+	// only use 2 chars so that some of the lookups are cached
+	mux.Vars(r)["hostname"] = randomString(4)
+	certificateGetHandler(w, r)
+}
+
+func randomString(n int) string {
+	var letter = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letter[rand.Intn(len(letter))]
+	}
+	return string(b)
+}
+
 func certificateGetHandler(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
 	hostname := vars["hostname"]
 
-	if len(hostname) <= 3 {
+	if len(hostname) <= 1 {
 		http.Error(w, "Invalid hostname provided", http.StatusNotAcceptable)
+		return
 	}
 
 	reqID := requestIDGenerator()
 
 	req := certsman.CertificateRequest{
 		RequestID: reqID,
-		Hostname:  hostname,
+		Hostname:  strings.ToLower(hostname),
 	}
 
 	resp := stringCertService.GetOrCreateCertificate(req)
