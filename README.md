@@ -45,7 +45,8 @@ The only other thing I can think of at the moment would be to introduce my own b
 reaps the expired cache on it's own, and then uses that process to announce an event when the servers cert has
 been reaped, so that it can be created again.
 
-After some more testing, I now realize that dupli
+After some more testing, I now realize that duplicate requests for the same domain are also a problem.  Ideally I'd change
+this so that domains are requested in a queue, unique by name.  Instead as a temp fix, I check the persistenace once the cert has been generated to see if any other processes have created a cert since the request started.
 
 ## API
 
